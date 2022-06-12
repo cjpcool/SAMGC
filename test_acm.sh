@@ -1,0 +1,1 @@
+python samgc.py --train False --dataset 'acm' --model_name 'samgc_acm_for_test.pkl' --order 16 --hidden_dim 256 --latent_dim 64 --use_cuda True --cuda_device 0
