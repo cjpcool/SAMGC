@@ -1,1 +1,0 @@
-python samgc.py --train True --dataset 'dblp' --order 9 --hidden_dim 256 --latent_dim 64 --use_cuda True --cuda_device 0 --lam_emd 1. --lam_consis 1. --weight_soft 0.2 --kl_step 10 --kl_max 100
