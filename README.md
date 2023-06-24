@@ -1,6 +1,21 @@
 #  SAMGC
 
-This is the code of paper: Shared-Attribute Multi-graph Clustering with Global Self-Attention
+This is the code of paper: Shared-Attribute Multi-graph Clustering with Global Self-Attention.
+
+### Cite this paper
+~~~
+@InProceedings{10.1007/978-3-031-30105-6_5,
+author="Chen, Jianpeng and Yang, Zhimeng and Pu, Jingyu and Ren, Yazhou and Pu, Xiaorong and Gao, Li and He, Lifang"
+title="Shared-Attribute Multi-Graph Clustering with Global Self-Attention",
+booktitle="Neural Information Processing",
+year="2023",
+publisher="Springer International Publishing",
+address="Cham",
+pages="51--63",
+isbn="978-3-031-30105-6"
+}
+~~~
+Chen, J. et al. (2023). Shared-Attribute Multi-Graph Clustering with Global Self-Attention. In: Tanveer, M., Agarwal, S., Ozawa, S., Ekbal, A., Jatowt, A. (eds) Neural Information Processing. ICONIP 2022. Lecture Notes in Computer Science, vol 13623. Springer, Cham. https://doi.org/10.1007/978-3-031-30105-6_5
 
 
 # Requirements
@@ -39,7 +54,8 @@ This is the code of paper: Shared-Attribute Multi-graph Clustering with Global S
 | **ACM**  | 77.2 | 82.8 | 94.0 | 94.0 |
 | **Cora** | 58.2 | 51.1 | 73.5 | 72.7 |
 
- 
+
+
 
 
 
