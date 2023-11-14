@@ -1,17 +1,13 @@
-import math
-import time
-
 import torch
 import torch.nn.functional as F
 from torch.nn.parameter import Parameter
-# from torch.nn.modules.module import Module
 import torch.nn as nn
 
-from layers import GraphAttentionLayer, GlobalSelfAttentionLayer, GraphEncoder, LatentMappingLayer
+from layers import GraphEncoder, LatentMappingLayer
 
 
 class MultiGraphAutoEncoder(nn.Module):
-    def __init__(self, feat_dim, hidden_dim, latent_dim, class_num, alpha=0.2, order=5, view_num=1):
+    def __init__(self, feat_dim, hidden_dim, latent_dim, class_num, lam_emd=1., alpha=0.2, order=5, view_num=1):
         super(MultiGraphAutoEncoder, self).__init__()
         self.hidden_size = hidden_dim
         self.latent_dim = latent_dim
@@ -22,7 +18,7 @@ class MultiGraphAutoEncoder(nn.Module):
         self.cluster_layer = [Parameter(torch.Tensor(class_num, latent_dim)) for _ in range(view_num)]
         self.cluster_layer.append(Parameter(torch.Tensor(class_num, view_num * latent_dim)))
         # self.cluster_layer.append(torch.cat(self.cluster_layer, dim=-1))
-        self.GraphEnc = [GraphEncoder(feat_dim, hidden_dim, latent_dim, order=order) for _ in range(view_num)]
+        self.GraphEnc = [GraphEncoder(feat_dim, hidden_dim, lam_emd=lam_emd, order=order) for _ in range(view_num)]
         self.LatentMap = [LatentMappingLayer(2*feat_dim, hidden_dim, latent_dim) for _ in range(view_num)]
         self.FeatDec = [LatentMappingLayer(latent_dim, hidden_dim, feat_dim) for _ in range(view_num)]
 
@@ -34,17 +30,13 @@ class MultiGraphAutoEncoder(nn.Module):
         self.register_parameter('centroid_{}'.format(view_num), self.cluster_layer[view_num])
 
     def forward(self, x, adj, view=0):
-        start = time.time()
         # x = torch.dropout(x, 0.2, train=self.training)
         e = self.GraphEnc[view](x, adj)
-        print('graph enc time:',(time.time() - start))
         # print('view:', view, self.GraphEnc[view].la)
         # print(self.cluster_layer[view])
         z = self.LatentMap[view](e)
-        print('Latent map time:', (time.time() - start))
         z_norm = F.normalize(z, p=2, dim=1)
         A_pred = self.decode(z_norm)
-        print('decode time:', (time.time() - start))
         q = self.predict_distribution(z_norm, view)
 
         x_prim = self.FeatDec[view](z)

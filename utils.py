@@ -194,7 +194,7 @@ def load_multi(dataset, root):
         truelabels, truefeatures = data['label'], data['features'].astype(float)
         N = truefeatures.shape[0]
         rownetworks = np.array([(data['net_APA']).tolist(), (data['net_APCPA']).tolist(), (data['net_APTPA']).tolist()])
-        # rownetworks = rownetworks[2:3]
+        # rownetworks = rownetworks[:2]
     elif dataset == 'imdb':
         truelabels, truefeatures = data['label'], data['feature'].astype(float)
         N = truefeatures.shape[0]

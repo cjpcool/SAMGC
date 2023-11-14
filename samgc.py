@@ -1,6 +1,5 @@
 import argparse
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn.functional as F
 from sklearn.cluster import KMeans
@@ -9,38 +8,35 @@ from evaluation import eva
 from utils import load_data, compute_ppr, get_sharp_common_z, sample_graph, normalize_weight
 from torch.optim import Adam
 from models import MultiGraphAutoEncoder
-import seaborn
 # ============================ 1.parameters ==========================
 parser = argparse.ArgumentParser()
 parser.add_argument('--dataset', type=str, default='acm', help='acm, dblp, imdb, cora, citeseer, pubmed')
 parser.add_argument('--train', type=bool, default=False, help='training mode')
-parser.add_argument('--model_name', type=str, default='samgc_dblp', help='model name in test phrase')
-parser.add_argument('--name', type=str, default='dblp_X', help='save name')
+parser.add_argument('--model_name', type=str, default='samgc_acm', help='model name')
 
 parser.add_argument('--path', type=str, default='./data/', help='')
 parser.add_argument('--order', type=int, default=16, help='aggregation orders')  # cora=[8,6] citeseer=4 acm=[16] dblp=9
-parser.add_argument('--weight_soft', type=float, default=0.05, help='parameter of p')  # acm=0, dblp=[0.2,0.3]
+parser.add_argument('--weight_soft', type=float, default=0.5, help='parameter of p')  # acm=0, dblp=[0.2,0.3]
 parser.add_argument('--lam_emd', type=float, default=1., help='trade off between global self-attention and gnn')
 parser.add_argument('--kl_step', type=float, default=10., help='lambda kl')
 
-parser.add_argument('--lam_consis', type=float, default=0., help='lambda consis')
+parser.add_argument('--lam_consis', type=float, default=10., help='lambda consis')
 parser.add_argument('--hidden_dim', type=int, default=256, help='lambda consis')  # citeseer=[512] others=default
 parser.add_argument('--latent_dim', type=int, default=64, help='lambda consis')  # citeseer=[16] others=default
 
 parser.add_argument('--epoch', type=int, default=20000, help='')
-parser.add_argument('--patience', type=int, default=150, help='')
+parser.add_argument('--patience', type=int, default=100, help='')
 parser.add_argument('--lr', type=float, default=1e-3, help='')
 parser.add_argument('--weight_decay', type=float, default=5e-3, help='')
 parser.add_argument('--temperature', type=float, default=0.5, help='')
-parser.add_argument('--cuda_device', type=int, default=5, help='')
+parser.add_argument('--cuda_device', type=int, default=1, help='')
 parser.add_argument('--use_cuda', type=bool, default=True, help='')
-parser.add_argument('--update_interval', type=int, default=3, help='')
+parser.add_argument('--update_interval', type=int, default=1, help='')
 parser.add_argument('--random_seed', type=int, default=2022, help='')
 parser.add_argument('--add_graph', type=bool, default=True, help='')
 
 
 args = parser.parse_args()
-name = args.name
 
 train = args.train
 dataset = args.dataset  # [imdb, dblp, acm]  [cora, citeseer, pubmed]
@@ -67,17 +63,13 @@ random_seed = args.random_seed
 
 torch.manual_seed(random_seed)
 
-
-first = True
-# for kl_step in [0,10]:
-#     for times in range(2):
 # ============================ 2.dataset and model preparing ==========================
 labels, adjs, features, adjs_labels, feature_labels, graph_num = load_data(dataset, path)
 # graph_num = 1
 # adjs=adjs[:1]
 # adjs_labels = adjs_labels[:1]
 
-class_num = labels.max()+1
+class_num = int(labels.max()+1)
 feat_dim = features.shape[1]
 
 if dataset in ['cora', 'citeseer', 'pubmed']:
@@ -152,7 +144,7 @@ if train:
         y_pred = kmeans.fit_predict(z.data.cpu().numpy())
         y_pred_last = y_pred
         model.cluster_layer[-1].data = torch.tensor(kmeans.cluster_centers_).to(device)
-        nmi, acc, ari, f1 = eva(y, y_pred, 'Kz')
+        eva(y, y_pred, 'Kz')
         print()
 
     bad_count = 0
@@ -231,7 +223,7 @@ if train:
         kl_loss *= l
         # -----------------------------------------------------------------------
 
-        loss = re_loss + re_feat_loss + consis_loss + kl_loss
+        loss = re_loss + kl_loss + consis_loss + re_feat_loss
 
         optimizer_ge.zero_grad()
         loss.backward()
@@ -256,9 +248,9 @@ if train:
             res2 = kmeans.fit_predict(z.data.cpu().numpy())
             nmi, acc, ari, f1 = eva(y, res2, str(epoch_num) + 'Kz')
 
-            for i in range(graph_num):
-                res1 = kmeans.fit_predict(zs[i].data.cpu().numpy())
-                _, _, _, _ = eva(y, res1, str(epoch_num) + 'K'+str(i))
+            # for i in range(graph_num):
+            #     res1 = kmeans.fit_predict(zs[i].data.cpu().numpy())
+            #     _, _, _, _ = eva(y, res1, str(epoch_num) + 'K'+str(i))
 
             for i in range(graph_num):
                 print('view:', str(i), np.around(model.GraphEnc[i].la.data.cpu().numpy(), 3))
@@ -283,7 +275,7 @@ if train:
                 best_loss = loss
             print('saving model epcoh:{}'.format(epoch_num))
             torch.save({'state_dict':model.state_dict(),
-                        'weights': weights}, 'samgc_{}.pkl'.format(name))
+                        'weights': weights}, 'samgc_{}.pkl'.format(dataset))
             bad_count = 0
         else:
             bad_count += 1
@@ -301,9 +293,8 @@ if train:
 # ============================================== Test =====================================================
 if not train:
     model_name = args.model_name
-    print(train)
 else:
-    model_name = 'samgc_{}.pkl'.format(name)
+    model_name = 'samgc_{}.pkl'.format(dataset)
 print('Loading model:{}...'.format(model_name))
 best_model = torch.load(model_name, map_location=features.device)
 weights = best_model['weights']
@@ -326,15 +317,9 @@ kmeans = KMeans(n_clusters=class_num, n_init=100)
 res2 = kmeans.fit_predict(z.data.cpu().numpy())
 nmi, acc, ari, f1 = eva(y, res2, str('eva:') + 'Kz')
 
+# for i in range(graph_num):
+#     res1 = kmeans.fit_predict(zs[i].data.cpu().numpy())
+#     eva(y, res1, str('eva:') + 'K' + str(i))
 
 print('Results: acc:{},  nmi:{},  ari:{},  f1:{}, '.format(
             acc, nmi, ari, f1))
-
-        # results = pd.DataFrame([[dataset, order, weight_soft, lam_emd, lam_consis, kl_step, acc, nmi, ari, f1]],
-        #                        columns=['dataset', 'order', 'weight_soft', 'lam_emd', 'lam_consis', 'kl_step', 'acc', 'nmi', 'ari', 'f1'])
-        #
-        # results.to_csv('./performance.csv', index=False, mode='a', header=first)
-        # if first:
-        #     first = False
-
-

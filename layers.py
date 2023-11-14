@@ -6,52 +6,6 @@ from torch.nn.modules.module import Module
 import torch.nn as nn
 
 
-class GraphAttentionLayer(nn.Module):
-    """
-    Simple GAT layer, similar to https://arxiv.org/abs/1710.10903
-    """
-    def __init__(self, in_features, out_features, alpha=0.2):
-        super(GraphAttentionLayer, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.alpha = alpha
-
-        self.W = nn.Parameter(torch.zeros(size=(in_features, out_features)))
-        nn.init.xavier_uniform_(self.W.data, gain=1.414)
-
-        self.a_self = nn.Parameter(torch.zeros(size=(out_features, 1)))
-        nn.init.xavier_uniform_(self.a_self.data, gain=1.414)
-
-        self.a_neighs = nn.Parameter(torch.zeros(size=(out_features, 1)))
-        nn.init.xavier_uniform_(self.a_neighs.data, gain=1.414)
-
-        self.leakyrelu = nn.LeakyReLU(self.alpha)
-
-    def forward(self, input, adj, concat=True):
-        h = torch.mm(input, self.W)
-        #前馈神经网络
-        attn_for_self = torch.mm(h,self.a_self)       #(N,1)
-        attn_for_neighs = torch.mm(h,self.a_neighs)   #(N,1)
-        attn_dense = attn_for_self + torch.transpose(attn_for_neighs,0,1)
-        M = adj.bool()*1.0
-        attn_dense = torch.mul(attn_dense,M)
-        attn_dense = self.leakyrelu(attn_dense)            #(N,N)
-
-        #掩码（邻接矩阵掩码）
-        zero_vec = -9e15*torch.ones_like(adj)
-        adj = torch.where(adj > 0, attn_dense, zero_vec)
-        attention = F.softmax(adj, dim=1)
-        h_prime = torch.matmul(attention,h)
-
-        if concat:
-            return F.elu(h_prime)
-        else:
-            return h_prime
-
-    def __repr__(self):
-            return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.out_features) + ')'
-
-
 class LatentMappingLayer(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(LatentMappingLayer, self).__init__()
@@ -73,10 +27,11 @@ class LatentMappingLayer(nn.Module):
 
 
 class GraphEncoder(nn.Module):
-    def __init__(self, feat_dim, hidden_dim, latent_dim, order=4, alpha=0.2):
+    def __init__(self, feat_dim, hidden_dim, lam_emd=1., order=4):
         super(GraphEncoder, self).__init__()
         self.order = order
         self.SAL = GlobalSelfAttentionLayer(feat_dim, hidden_dim)
+        self.lam_emd = lam_emd
         self.la = nn.Parameter(torch.ones(self.order))
         nn.init.normal_(self.la.data, mean=1., std=.001)
         # if cora, citeseer, pubmed
@@ -95,12 +50,11 @@ class GraphEncoder(nn.Module):
         else:
             h2 = x
 
-        # h1 = torch.mm(sattn, x)
-        if True or x.shape[0] not in [3327, 19717]:
+        if True:  # or x.shape[0] not in [3327, 19717]:
             h1 = self.SAL(x)
         else:
             h1 = h2
-        h = torch.cat([h2, h1], dim=-1)
+        h = torch.cat([h2, self.lam_emd * h1], dim=-1)
         return h
 
 
@@ -118,20 +72,16 @@ class GlobalSelfAttentionLayer(nn.Module):
         # nn.init.xavier_normal_(self.V.data, gain=1.141)
 
     def forward(self, x):
-        # x = x.bool().float()
         k = torch.matmul(x, self.K)
         q = torch.matmul(x, self.Q)
-        # k = F.relu(k)
-        # q = F.relu(q)
+        k = F.elu(k)
+        q = F.elu(q)
         attn = torch.matmul(q, k.T)
-        # attn = torch.relu(attn)
-        # attn = F.normalize(attn, p=2, dim=-1)
-        attn = torch.softmax(attn,-1)
-        # print(attn)
-        # v = torch.matmul(x, self.V)
+        attn = F.normalize(attn, p=2, dim=-1)
+
         h = torch.mm(attn, x)
-        # h = F.elu(h)
-        h = F.relu(h)
+
+        h = F.elu(h)
         # print(attn)
         return h
 
